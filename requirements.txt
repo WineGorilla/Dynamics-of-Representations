@@ -1,0 +1,10 @@
+pandas
+numpy
+torch
+transformers
+pillow
+tqdm
+librosa
+nibabel
+nilearn
+matplotlib

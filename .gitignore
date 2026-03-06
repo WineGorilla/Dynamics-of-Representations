@@ -1,0 +1,4 @@
+data/
+nfas/
+__pycache__
+*.pyc
