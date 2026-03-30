@@ -98,10 +98,11 @@ def fused_roi_pearson(X, Y, alpha=50.0):
     return corr.astype(np.float32)
 
 
-def run_one_model_fused(model_name, alpha=50.0):
+def run_one_model_fused(model_name, center, alpha=50.0):
+    center_str = f"{int(center*10):02d}"
     FMRI_ROOT = "data/img/fmri"
-    EMB_ROOT  = f"data/img/design_matrix_dmd_mean/{model_name}"
-    SAVE_ROOT = f"results/dmd_mean/hrf/img_fused/{model_name}"
+    EMB_ROOT  = f"data/img/design_matrix_dmd_soft{center_str}/{model_name}"
+    SAVE_ROOT = f"results/soft/{center_str}/img_fused/{model_name}"
     os.makedirs(SAVE_ROOT, exist_ok=True)
 
     pearson_list = []
@@ -179,13 +180,16 @@ vision_models = [
 if __name__ == "__main__":
     MAX_WORKERS = 6
     ALPHA = 10.0  
+    centers = [0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+    for center in centers:
+        with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {executor.submit(run_one_model_fused, m,center, ALPHA): m for m in vision_models}
 
-    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {executor.submit(run_one_model_fused, m, ALPHA): m for m in vision_models}
+            for f in as_completed(futures):
+                model = futures[f]
+                try:
+                    f.result()
+                except Exception as e:
+                    print(f"[ERROR] {model}: {e}")
 
-        for f in as_completed(futures):
-            model = futures[f]
-            try:
-                f.result()
-            except Exception as e:
-                print(f"[ERROR] {model}: {e}")
+

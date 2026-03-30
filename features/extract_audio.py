@@ -3,7 +3,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import os
 import numpy as np
-from utils.encoder.audio_encoder import load_audio_model, get_audio_embeddings
+from core.encoder.audio_encoder import load_audio_model, get_audio_embeddings
 
 
 def generate_audio_embeddings(

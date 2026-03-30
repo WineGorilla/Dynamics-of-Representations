@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 from transformers import AutoTokenizer, AutoModel
-from utils.encoder.language_encoder import get_text_embeddings
+from core.encoder.language_encoder import get_text_embeddings
 
 
 def generate_language_embeddings(

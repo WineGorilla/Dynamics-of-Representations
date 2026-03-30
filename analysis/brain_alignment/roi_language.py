@@ -7,7 +7,7 @@ import tempfile
 import nibabel as nib
 from nilearn import image, datasets
 from nilearn.datasets import fetch_atlas_schaefer_2018
-from utils.roi_process import extract_roi_timeseries
+from core.roi_process import extract_roi_timeseries
 
 
 # 路径配置

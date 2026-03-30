@@ -97,11 +97,11 @@ def fused_roi_pearson(X, Y, alpha=50.0):
 # 主函数
 # =========================
 
-def run_one_lang_model_fused(model_name, alpha=50.0):
-
+def run_one_lang_model_fused(model_name, center, alpha=50.0):
+    center_str = f"{int(center*10):02d}"
     FMRI_ROOT = "data/lang/fmri"
-    EMB_DIR   = f"data/lang/design_matrix_dmd_mean/{model_name}"
-    SAVE_ROOT = f"results/dmd_mean/hrf/lang_fused/{model_name}"
+    EMB_DIR   = f"data/lang/design_matrix_dmd_soft{center_str}/{model_name}"
+    SAVE_ROOT = f"results/soft/{center_str}/lang_fused/{model_name}"
     os.makedirs(SAVE_ROOT, exist_ok=True)
 
     subs = sorted(s for s in os.listdir(FMRI_ROOT) if s.startswith("sub-"))
@@ -188,17 +188,18 @@ lang_models = [
 if __name__ == "__main__":
 
     MAX_WORKERS = 6
-    ALPHA = 10.0   # 别再用0
+    ALPHA = 10.0   
+    centers = [0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+    for center in centers:
+        with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(run_one_lang_model_fused, m,center, ALPHA): m
+                for m in lang_models
+            }
 
-    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {
-            executor.submit(run_one_lang_model_fused, m, ALPHA): m
-            for m in lang_models
-        }
-
-        for f in as_completed(futures):
-            model = futures[f]
-            try:
-                f.result()
-            except Exception as e:
-                print(f"[ERROR] {model}: {e}")
+            for f in as_completed(futures):
+                model = futures[f]
+                try:
+                    f.result()
+                except Exception as e:
+                    print(f"[ERROR] {model}: {e}")

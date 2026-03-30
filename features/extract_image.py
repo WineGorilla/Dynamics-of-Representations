@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import nibabel as nib
 from glob import glob
-from utils.encoder.image_encoder import load_image_model, get_image_embeddings
+from core.encoder.image_encoder import load_image_model, get_image_embeddings
 
 
 def generate_image_embeddings(

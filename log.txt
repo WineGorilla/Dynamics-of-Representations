@@ -1,0 +1,13 @@
+
+
+analysis/eigvals 提取模型刺激中的不同特征值，做统计，发现视觉mode=0的地方高，语言语音mode=1多
+analysis/soft 获取在不同特征值下的embedding
+global文件夹进行消融实验，验证在不同截断下，不同特征值下信息的相似度
+可视化，发现在mode=1中保留最全局关键的信息，图片，语言，语音都可视化
+analysis/window 进行创新性实验，将时间序列窗口化，观察embedding的变动与roi之间的变动是否同步 ==》 得到不同模型脑，视觉模型vis区域高，视觉某个地方高，语言某个地方高
+
+/test/plot.py 看模态的情况 包括分布等
+/test/see.py 看模型的情况
+/test/test.py 看脑图
+
+extend 提取额外的模型数据
