@@ -103,8 +103,8 @@ def run_one_model_fused(model_name, center, alpha=50.0):
     center_str = f"{int(center*10):02d}"
 
     FMRI_ROOT = "data/img/fmri"
-    EMB_ROOT  = f"data/img/design_matrix_dmd_soft{center_str}/{model_name}"
-    SAVE_ROOT = f"results/pearson/{center_str}/img_fused/{model_name}"
+    EMB_ROOT  = f"filterData/img/design_matrix_dmd_soft{center_str}/{model_name}"
+    SAVE_ROOT = f"final_results/pearson/{center_str}/img_fused/{model_name}"
 
     os.makedirs(SAVE_ROOT, exist_ok=True)
 
@@ -203,32 +203,36 @@ def run_one_model_fused(model_name, center, alpha=50.0):
     return model_name
 
 
-vision_models = [
-    "beit-base-patch16-224-pt22k-ft22k",
-    "beit-large-patch16-224-pt22k-ft22k",
-    "data2vec-vision-base",
-    "data2vec-vision-large",
-    "deit-base-patch16-224",
-    "deit-small-patch16-224",
-    "dino-vitb16",
-    "dino-vits16",
-    "dinov2-base",
-    "dinov2-large",
-    "dinov2-small",
-    "vit-base-patch16-224-in21k",
-    "vit-large-patch16-224-in21k",
-    "vit-mae-base",
-    "vit-mae-large",
-    "vit-msn-base",
-    "vit-msn-large",
-]
-
+# vision_models = [
+#     "beit-base-patch16-224-pt22k-ft22k",
+#     "beit-large-patch16-224-pt22k-ft22k",
+#     "data2vec-vision-base",
+#     "data2vec-vision-large",
+#     "deit-base-patch16-224",
+#     "deit-small-patch16-224",
+#     "dino-vitb16",
+#     "dino-vits16",
+#     "dinov2-base",
+#     "dinov2-large",
+#     "dinov2-small",
+#     "vit-base-patch16-224-in21k",
+#     "vit-large-patch16-224-in21k",
+#     "vit-mae-base",
+#     "vit-mae-large",
+#     "vit-msn-base",
+#     "vit-msn-large",
+# ]
+design_root = "filterData/img/design_matrix"
+vision_models = sorted(
+    d for d in os.listdir(design_root)
+    if os.path.isdir(os.path.join(design_root, d))
+)
 
 if __name__ == "__main__":
     MAX_WORKERS = 6
     ALPHA = 10.0  
     #centers = [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.2,1.4]
-    centers = [1.0]
+    centers = [0.0,0.2,0.4,0.6,0.8,1.0,1.2]
     for center in centers:
         with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {executor.submit(run_one_model_fused, m,center, ALPHA): m for m in vision_models}

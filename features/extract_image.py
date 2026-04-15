@@ -8,14 +8,14 @@ import nibabel as nib
 from glob import glob
 from core.encoder.image_encoder import load_image_model, get_image_embeddings
 
-
+#CUDA_VISIBLE_DEVICES=2 python features/extract_image.py
 def generate_image_embeddings(
     model_name="google/vit-base-patch16-224",
-    data_root="data/image_data/ds004192-download",
-    img_root="data/image_data/images",
+    data_root="data/img_data/ds004192-download",
+    img_root="data/img_data/images",
     save_root="filterData/img/design_matrix",
     tr=2.0,
-    device="mps",
+    device="cuda",
     batch_size=8,
 ):
 
@@ -49,7 +49,7 @@ def generate_image_embeddings(
 
         X_layers = get_image_embeddings(
             extractor, model, img_paths,
-            device=device, all_layers=True, cls_only=True,
+            device=device, all_layers=True, cls_only=False,
             batch_size=batch_size
         )
         n_layers = len(X_layers)
@@ -74,7 +74,7 @@ def generate_image_embeddings(
 
         sub_save_dir = os.path.join(model_save_root, sub, ses)
         os.makedirs(sub_save_dir, exist_ok=True)
-
+        print("Yes")
         bold_name = os.path.basename(events_file).replace("_events.tsv", "")
         save_name = bold_name + "_bold_embedding.npy"
         save_path = os.path.join(sub_save_dir, save_name)
@@ -101,17 +101,17 @@ def generate_image_embeddings(
 # 调用
 if __name__ == "__main__":
     vision_models = [
-        "microsoft/beit-base-patch16-224-pt22k-ft22k",
-        "microsoft/beit-large-patch16-224-pt22k-ft22k",
+        # "microsoft/beit-base-patch16-224-pt22k-ft22k",
+        # "microsoft/beit-large-patch16-224-pt22k-ft22k",
 
-        "facebook/data2vec-vision-base",
-        "facebook/data2vec-vision-large",
+        # "facebook/data2vec-vision-base",
+        # "facebook/data2vec-vision-large",
 
-        "facebook/deit-base-patch16-224",
-        "facebook/deit-small-patch16-224",
+        # "facebook/deit-base-patch16-224",
+        # "facebook/deit-small-patch16-224",
 
-        "facebook/dino-vitb16",
-        "facebook/dino-vits16",
+        # "facebook/dino-vitb16",
+        # "facebook/dino-vits16",
 
         "facebook/dinov2-base",
         "facebook/dinov2-large",
@@ -126,9 +126,10 @@ if __name__ == "__main__":
         "facebook/vit-msn-base",
         "facebook/vit-msn-large",
     ]
+    print("Yes")
     for model_name in vision_models:
         generate_image_embeddings(
             model_name=model_name,
-            device="mps",
+            device="cuda",
             batch_size=8
         )

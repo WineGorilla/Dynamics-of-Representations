@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LogNorm
 
-
+# CUDA_VISIBLE_DEVICES=2 python test/plot.py
 # -------------------------
 # load eigenvalues
 # -------------------------
-eigvals = np.load("processed/eigvals/eigvals_vision.npy")
+eigvals = np.load("processed_new/eigvals/vision/beit-large-patch16-224-pt22k-ft22k.npy")
 
 
 # =========================
@@ -22,7 +22,7 @@ plt.figure()
 
 plt.hist(
     rho,
-    bins=100,
+    bins=20,
     density=True
 )
 

@@ -108,8 +108,8 @@ def fused_roi_pearson(X, Y, alpha=10.0):
 def run_one_model_fused(model_name, center, alpha=50.0):
     center_str = f"{int(center*10):02d}"
     FMRI_ROOT = "data/audio/fmri"
-    EMB_ROOT  = f"data/audio/design_matrix_dmd_soft{center_str}/{model_name}"
-    SAVE_ROOT = f"results/pearson/{center_str}/audio_fused/{model_name}"
+    EMB_ROOT  = f"filterData/audio/design_matrix_dmd_soft{center_str}/{model_name}"
+    SAVE_ROOT = f"final_results/pearson/{center_str}/audio_fused/{model_name}"
     os.makedirs(SAVE_ROOT, exist_ok=True)
 
     pearson_list = []
@@ -171,27 +171,33 @@ def run_one_model_fused(model_name, center, alpha=50.0):
     return model_name
 
 
-audio_models = [
-    'data2vec-audio-base',
-    'data2vec-audio-large',
-    'hubert-base-ls960',
-    'hubert-large-ls960-ft',
-    'wav2vec2-base-960h',
-    'wav2vec2-base-superb-ks',
-    'wav2vec2-large-xlsr-53',
-    'wav2vec2-xls-r-1b',
-    'wav2vec2-xls-r-300m',
-    'wavlm-base',
-    'wavlm-base-plus',
-    'wavlm-large',
-]
+# audio_models = [
+#     'data2vec-audio-base',
+#     'data2vec-audio-large',
+#     'hubert-base-ls960',
+#     'hubert-large-ls960-ft',
+#     'wav2vec2-base-960h',
+#     'wav2vec2-base-superb-ks',
+#     'wav2vec2-large-xlsr-53',
+#     'wav2vec2-xls-r-1b',
+#     'wav2vec2-xls-r-300m',
+#     'wavlm-base',
+#     'wavlm-base-plus',
+#     'wavlm-large',
+# ]
+
+design_root = "filterData/audio/design_matrix"
+audio_models = sorted(
+    d for d in os.listdir(design_root)
+    if os.path.isdir(os.path.join(design_root, d))
+)
 
 if __name__ == "__main__":
 
     MAX_WORKERS = 6
     ALPHA = 10.0  
-    #centers = [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]
-    centers = [1.0]
+    centers = [0.0,0.2,0.4,0.6,0.8,1.0,1.2]
+    #centers = [1.0]
     for center in centers:
         with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {

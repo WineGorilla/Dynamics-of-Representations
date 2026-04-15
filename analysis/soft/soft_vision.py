@@ -11,7 +11,7 @@ from tqdm import tqdm
 from core.dmd import fuse_layers_single_soft_dmd
 
 def fuse_all_img_models(
-    root="data/img",
+    root="filterData/img",
     k=3,
     center=0.1
 ):
@@ -59,9 +59,9 @@ def fuse_all_img_models(
             np.save(out_path, fused)
 
 #centers = [0.1, 0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.2]
-centers = [1.0]
+centers = [0.0, 0.2,0.4,0.6,0.8,1.0,1.2]
 for center in centers:
     fuse_all_img_models(
-        root="data/img",
+        root="filterData/img",
         center=center
     )

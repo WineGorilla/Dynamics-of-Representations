@@ -6,7 +6,7 @@ from glob import glob
 from tqdm import tqdm
 
 
-def collect_one_language_model(model="gpt2", root="data/lang"):
+def collect_one_language_model(model="gpt2", root="filterData/lang"):
 
     design_root = os.path.join(root, "design_matrix")
     in_model_dir = os.path.join(design_root, model)
@@ -37,7 +37,7 @@ def collect_one_language_model(model="gpt2", root="data/lang"):
     return np.array(all_eigs)
 
 
-def collect_one_audio_model(model="ast", root="data/audio"):
+def collect_one_audio_model(model="ast", root="filterData/audio"):
 
     design_root = os.path.join(root, "design_matrix")
     in_model_dir = os.path.join(design_root, model)
@@ -67,7 +67,7 @@ def collect_one_audio_model(model="ast", root="data/audio"):
 
     return np.array(all_eigs)
 
-def collect_one_img_model(model="clip", root="data/img"):
+def collect_one_img_model(model="clip", root="filterData/img"):
 
     design_root = os.path.join(root, "design_matrix")
 

@@ -19,7 +19,8 @@ def load_image_model(model_name="facebook/dinov2-base", device="mps"):
 
 
 # 计算embedding
-def get_image_embeddings(extractor, model, image_paths, device, all_layers=True, cls_only=True, batch_size=4):
+# cls_only改变修改机制
+def get_image_embeddings(extractor, model, image_paths, device, all_layers=True, cls_only=False, batch_size=4):
     all_hidden_layers = []
     model.eval()
 
@@ -55,7 +56,7 @@ def get_image_embeddings(extractor, model, image_paths, device, all_layers=True,
 
 
 
-def get_image_embeddings_from_pil(extractor, model, images, device, cls_only=True, batch_size=4):
+def get_image_embeddings_from_pil(extractor, model, images, device, cls_only=False, batch_size=4):
     """
     新增函数：直接接受 PIL Image 列表，无需临时文件。
     接口与 get_image_embeddings 一致，返回 list of (N, d) arrays，长度 = 层数。

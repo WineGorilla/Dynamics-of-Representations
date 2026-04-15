@@ -1,5 +1,7 @@
+# CUDA_VISIBLE_DEVICES=2 python analysis/extend/moreimg.py
+
 import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -10,21 +12,23 @@ import numpy as np
 import pandas as pd
 import nibabel as nib
 from glob import glob
-from models.image_encoder import load_image_model, get_image_embeddings
+from core.encoder.image_encoder import load_image_model, get_image_embeddings
 
 
 def generate_image_embeddings(
     model_name,
-    data_root="data/image_data/ds004192-download",
-    img_root="data/image_data/images",
-    save_root="filterData/img/design_matrix_extra",
+    data_root="data/img_data/ds004192-download",
+    img_root="data/img_data/images",
+    save_root="data/img/design_matrix_extra",
     tr=2.0,
-    device="mps",
-    batch_size=8,
+    device="cuda",
+    batch_size=4,
 ):
     model_tag = model_name.split("/")[-1]
     model_save_root = os.path.join(save_root, model_tag)
     os.makedirs(model_save_root, exist_ok=True)
+    assert os.path.exists(data_root), "data_root 不存在"
+    assert os.path.exists(img_root), "img_root 不存在"
 
     extractor, model = load_image_model(model_name, device=device)
 
@@ -100,7 +104,8 @@ def generate_image_embeddings(
     del model
     del extractor
     gc.collect()
-    torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
@@ -113,7 +118,7 @@ if __name__ == "__main__":
         # "laion/CLIP-ViT-L-14-laion2B-s32B-b82K",
 
         # # ── Swin Transformer 系列 ──────────────────────
-        # "microsoft/swin-tiny-patch4-window7-224",
+        "microsoft/swin-tiny-patch4-window7-224",
         # "microsoft/swin-small-patch4-window7-224",
         # "microsoft/swin-base-patch4-window7-224",
         # "microsoft/swin-large-patch4-window7-224",
@@ -123,7 +128,7 @@ if __name__ == "__main__":
         # "google/siglip-large-patch16-384",
 
         # # ── SAM 视觉编码器 ─────────────────────────────
-        "facebook/sam-vit-base",
+        #"facebook/sam-vit-base",
         # "facebook/sam-vit-large",
         # "facebook/sam-vit-huge",
     ]
@@ -133,11 +138,12 @@ if __name__ == "__main__":
         try:
             generate_image_embeddings(
                 model_name=model_name,
-                device="mps",
-                batch_size=8
+                device="cuda",
+                batch_size=4
             )
         except Exception as e:
             print(f"  ❌ Failed: {e}")
         finally:
             gc.collect()
-            torch.mps.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
