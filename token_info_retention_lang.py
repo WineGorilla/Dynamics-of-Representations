@@ -32,12 +32,20 @@ from core.dmd import fuse_layers_single_soft_dmd
 
 
 # ═══════════════════════════════════════════════════════════════
-#  模型加载
+#  模型加载（与 lang_new.py 对齐）
 # ═══════════════════════════════════════════════════════════════
 
 def load_lang_model(model_name, device):
     model_lower = model_name.lower()
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    # 判断是否为 BPE-based 模型（需要 add_prefix_space）
+    needs_prefix_space = any(k in model_lower for k in ["gpt2", "roberta", "bart"])
+
+    tokenizer_kwargs = {"use_fast": True}
+    if needs_prefix_space:
+        tokenizer_kwargs["add_prefix_space"] = True
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_kwargs)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -48,30 +56,71 @@ def load_lang_model(model_name, device):
     else:
         model = AutoModel.from_pretrained(model_name, output_hidden_states=True)
 
+    # GPT-2 等 causal 模型需要显式设 pad_token_id
+    if model.config.pad_token_id is None:
+        model.config.pad_token_id = tokenizer.pad_token_id
+
     model = model.to(device).eval()
     return tokenizer, model
 
 
 # ═══════════════════════════════════════════════════════════════
-#  Per-token hidden states 提取
+#  Per-word hidden states 提取（与 lang_new.py 对齐）
+#  使用 is_split_into_words=True，对每个词的 subword 取均值
 # ═══════════════════════════════════════════════════════════════
 
-def extract_per_token_states(tokenizer, model, sentence, device, max_length=128):
-    """单个句子 → (L, N_tokens, D)"""
-    inputs = tokenizer(
-        sentence, return_tensors="pt",
-        truncation=True, max_length=max_length
+def extract_per_word_states(tokenizer, model, words, device, max_length=512):
+    """
+    输入一组词列表 words: List[str]
+    返回 (L, N_words, D)，每个词的 hidden state 是其 subword tokens 的均值
+    """
+    words = [str(w) for w in words]
+
+    enc = tokenizer(
+        words,
+        is_split_into_words=True,
+        return_tensors="pt",
+        truncation=True,
+        max_length=max_length,
+        padding=False,
     ).to(device)
 
+    word_ids = enc.word_ids(batch_index=0)
+
     with torch.no_grad():
-        outputs = model(**inputs)
+        outputs = model(**enc)
 
-    hidden_states = outputs.hidden_states
-    attn_mask = inputs["attention_mask"][0]
-    valid_len = int(attn_mask.sum().item())
+    hidden_states = outputs.hidden_states  # tuple of (1, seq_len, dim)
+    n_layers = len(hidden_states)
+    dim = hidden_states[0].shape[-1]
+    n_words = len(words)
 
-    token_states = [h[0, :valid_len, :].cpu().numpy() for h in hidden_states]
-    return np.stack(token_states, axis=0).astype(np.float32)
+    # 构建每个词对应的 subword token 位置
+    word_to_positions = {}
+    for t_idx, w_id in enumerate(word_ids):
+        if w_id is not None:
+            word_to_positions.setdefault(w_id, []).append(t_idx)
+
+    # 对每层、每个词，取 subword 均值
+    result = np.zeros((n_layers, n_words, dim), dtype=np.float32)
+    valid_mask = np.zeros(n_words, dtype=bool)
+
+    for w_idx in range(n_words):
+        positions = word_to_positions.get(w_idx, [])
+        if len(positions) == 0:
+            # 该词被 truncation 截掉了，标记为无效
+            continue
+        valid_mask[w_idx] = True
+        pos_tensor = torch.tensor(positions, device=device)
+        for layer_idx, h in enumerate(hidden_states):
+            vec = h[0, pos_tensor, :].mean(dim=0)  # (dim,)
+            result[layer_idx, w_idx, :] = vec.cpu().numpy()
+
+    # 只保留有效的词
+    if not valid_mask.all():
+        result = result[:, valid_mask, :]
+
+    return result  # (L, N_valid_words, D)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -94,7 +143,7 @@ def format_p(p):
 
 
 # ═══════════════════════════════════════════════════════════════
-#  核心：处理一个句子的所有 token
+#  核心：处理一个句子（词列表）的所有 token
 # ═══════════════════════════════════════════════════════════════
 
 def process_tokens(token_states, centers, dmd_k=3, sigma=0.1):
@@ -107,32 +156,35 @@ def process_tokens(token_states, centers, dmd_k=3, sigma=0.1):
         for c in centers:
             try:
                 fused = fuse_layers_single_soft_dmd(trajectory, r=dmd_k, center=c, sigma=sigma)
-                sims[c].append(cosine_sim(fused, last_layer[t]))
+                sims[c].append(abs(cosine_sim(fused, last_layer[t])))
             except Exception:
                 sims[c].append(0.0)
     return sims
 
 
 # ═══════════════════════════════════════════════════════════════
-#  构建句子
+#  构建词列表（不再拼接为字符串，返回 List[List[str]]）
 # ═══════════════════════════════════════════════════════════════
 
-def build_sentences_from_csv(csv_path, win_size=50, step=25):
+def build_word_groups_from_csv(csv_path, win_size=50, step=25):
+    """
+    返回 List[List[str]]，每个元素是一组词（对应一个滑窗）
+    """
     df = pd.read_csv(csv_path).sort_values(["section", "onset"])
-    all_sentences = []
+    all_groups = []
     for sec in sorted(df["section"].unique()):
         words = df[df["section"] == sec]["word"].dropna().astype(str).tolist()
         words = [w for w in words if w.strip() and w != "nan"]
         for i in range(0, max(1, len(words) - win_size + 1), step):
-            all_sentences.append(" ".join(words[i:i + win_size]))
-    return all_sentences
+            all_groups.append(words[i:i + win_size])
+    return all_groups
 
 
 # ═══════════════════════════════════════════════════════════════
 #  单个模型
 # ═══════════════════════════════════════════════════════════════
 
-def run_one_model(model_name, sentences, centers, device="cuda",
+def run_one_model(model_name, word_groups, centers, device="cuda",
                   sigma=0.1, dmd_k=3):
 
     tokenizer, model = load_lang_model(model_name, device)
@@ -140,9 +192,9 @@ def run_one_model(model_name, sentences, centers, device="cuda",
 
     all_sims = {c: [] for c in centers}
 
-    for sentence in tqdm(sentences, desc=f"  {tag}"):
+    for words in tqdm(word_groups, desc=f"  {tag}"):
         try:
-            token_states = extract_per_token_states(tokenizer, model, sentence, device)
+            token_states = extract_per_word_states(tokenizer, model, words, device)
         except Exception:
             continue
         if token_states.shape[1] < 3:
@@ -344,7 +396,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device",         type=str,   default="cuda")
     parser.add_argument("--csv_path",       type=str,   default="data/lang_data/lppEN_word_information.csv")
-    parser.add_argument("--sigma",          type=float, default=0.1)
+    parser.add_argument("--sigma",          type=float, default=0.01)
     parser.add_argument("--dmd_k",          type=int,   default=3)
     parser.add_argument("--max_sentences",  type=int,   default=200)
     parser.add_argument("--win_size",       type=int,   default=50)
@@ -355,16 +407,17 @@ def main():
     os.makedirs(args.save_root, exist_ok=True)
     centers = [0.0, 0.5, 1.0]
 
-    sentences = build_sentences_from_csv(args.csv_path, args.win_size, args.step)
-    sentences = sentences[:args.max_sentences]
-    print(f"Sentences: {len(sentences)} (win={args.win_size}, step={args.step})")
+    # 构建词列表组（不再拼接为字符串）
+    word_groups = build_word_groups_from_csv(args.csv_path, args.win_size, args.step)
+    word_groups = word_groups[:args.max_sentences]
+    print(f"Word groups: {len(word_groups)} (win={args.win_size}, step={args.step})")
     print(f"Centers = {centers}, sigma = {args.sigma}, dmd_k = {args.dmd_k}")
 
     all_results = []
     for model_name in LANGUAGE_MODELS:
         print(f"\n  [{model_name}]")
         try:
-            r = run_one_model(model_name, sentences, centers,
+            r = run_one_model(model_name, word_groups, centers,
                               device=args.device, sigma=args.sigma, dmd_k=args.dmd_k)
             if r:
                 all_results.append(r)

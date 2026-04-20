@@ -12,7 +12,7 @@ from core.dmd import fuse_layers_single_soft_dmd
 
 
 def fuse_all_lang_models(
-    root="filterData/lang",
+    root="filterData/lang_new",
     k=3,
     center=0.1
 ):
@@ -61,7 +61,7 @@ def fuse_all_lang_models(
 centers = [0.0, 0.2,0.4,0.6,0.8,1.0,1.2]
 for center in centers:
     fuse_all_lang_models(
-        root="filterData/lang",
+        root="filterData/lang_new",
         center=center
     )
 

@@ -124,7 +124,7 @@ def process_frames(frame_tokens, centers, dmd_k=3, sigma=0.1):
         for c in centers:
             try:
                 fused = fuse_layers_single_soft_dmd(trajectory, r=dmd_k, center=c, sigma=sigma)
-                sims[c].append(cosine_sim(fused, last_layer[t]))
+                sims[c].append(abs(cosine_sim(fused, last_layer[t])))
             except Exception:
                 sims[c].append(0.0)
     return sims
@@ -350,8 +350,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device",      type=str,   default="cuda")
     parser.add_argument("--audio_dir",   type=str,   default="data/audio_data/stimuli")
-    parser.add_argument("--sigma",       type=float, default=0.1)
-    parser.add_argument("--dmd_k",       type=int,   default=1)
+    parser.add_argument("--sigma",       type=float, default=0.01)
+    parser.add_argument("--dmd_k",       type=int,   default=3)
     parser.add_argument("--max_audio",   type=int,   default=50)
     parser.add_argument("--duration",    type=float, default=5.0,
                         help="每段音频只取前 N 秒")

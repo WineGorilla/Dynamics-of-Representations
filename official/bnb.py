@@ -6,7 +6,10 @@ DMD 谱集中度分析
 - 模态间检验：Kruskal-Wallis + Mann-Whitney U 两两比较
 - 输出表格
 """
+import sys
+import os
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 import numpy as np
 import os
 from glob import glob
@@ -222,7 +225,7 @@ def main():
     modalities = {
         "Vision": os.path.join(base_dir, "vision"),
         "Audio": os.path.join(base_dir, "audio"),
-        "Language": os.path.join(base_dir, "language"),
+        "Language": os.path.join(base_dir, "language_new"),
     }
 
     summaries = []
