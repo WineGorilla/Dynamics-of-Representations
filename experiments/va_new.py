@@ -1,6 +1,11 @@
 """
-Layer-wise Affine Fitting Validation
-======================================
+Layer-wise Affine Fitting Validation (新数据集版)
+==================================================
+适配 embeddings/ 目录结构:
+  embeddings/vision/{model}.npy          单文件 (n_layers, n_images, feat_dim)
+  embeddings/audio/{model}/*.npy         每条音频一个文件 (n_layers, n_chunks, feat_dim)
+  embeddings/language/{model}/*.npy      每个文本一个文件 (n_layers, n_bins, feat_dim)
+
 For each adjacent layer pair (k, k+1), fit:
   x_{k+1} = A_k @ x_k + c_k
 using all stimuli via ridge regression.
@@ -8,9 +13,10 @@ using all stimuli via ridge regression.
 Report per-layer R^2 and relative error, aggregate by modality.
 
 Usage:
-  CUDA_VISIBLE_DEVICES=2 python va.py
+  CUDA_VISIBLE_DEVICES=1 python experiments/va_new.py
 """
-
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torch
 import numpy as np
 import os
@@ -24,40 +30,9 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {DEVICE}")
 
 
-def extract_layer_pairs_vision(data):
-    """
-    Vision format: (n_layers, n_tr, d)
-    Extract non-zero TRs.
-    """
-    norms = np.linalg.norm(data, axis=2)
-    active_mask = norms.sum(axis=0) > 0
-    active_trs = np.where(active_mask)[0]
-
-    valid = []
-    for t in active_trs:
-        traj = data[:, t, :]
-        if np.any(np.linalg.norm(traj, axis=1) == 0):
-            continue
-        valid.append(t)
-
-    if len(valid) == 0:
-        return None
-    return data[:, valid, :]  # (n_layers, N_valid, d)
-
-
-def extract_layer_pairs_audio(data):
-    """
-    Audio format: (n_layers, n_chunks, d) — all chunks are valid samples.
-    Filter out any chunk where any layer is exactly zero.
-    """
-    n_layers, n_chunks, d = data.shape
-    layer_norms = np.linalg.norm(data, axis=2)  # (n_layers, n_chunks)
-    valid_mask = np.all(layer_norms > 0, axis=0)  # (n_chunks,)
-
-    if valid_mask.sum() == 0:
-        return None
-    return data[:, valid_mask, :]
-
+# ====================================================================
+#  Ridge Regression (GPU)
+# ====================================================================
 
 def ridge_fit_gpu(X, Y, alpha=1.0):
     """
@@ -68,27 +43,22 @@ def ridge_fit_gpu(X, Y, alpha=1.0):
     N, d_in = X.shape
     d_out = Y.shape[1]
 
-    # Center
     X_mean = X.mean(dim=0, keepdim=True)
     Y_mean = Y.mean(dim=0, keepdim=True)
     Xc = X - X_mean
     Yc = Y - Y_mean
 
-    # W = (X^T X + alpha I)^{-1} X^T Y
     XtX = Xc.T @ Xc + alpha * torch.eye(d_in, device=DEVICE, dtype=X.dtype)
     XtY = Xc.T @ Yc
     W = torch.linalg.solve(XtX, XtY)
 
-    # Predict
     Y_hat = Xc @ W + Y_mean
     Y_pred_centered = Y_hat - Y_mean
 
-    # R^2
     ss_res = torch.sum((Yc - Y_pred_centered) ** 2).item()
     ss_tot = torch.sum(Yc ** 2).item()
     r2 = 1.0 - ss_res / (ss_tot + 1e-12)
 
-    # Relative error: ||Y - Y_hat||_F / ||Y||_F
     residual = torch.norm(Y - Y_hat, 'fro').item()
     norm_y = torch.norm(Y, 'fro').item()
     rel_err = residual / (norm_y + 1e-12)
@@ -96,21 +66,67 @@ def ridge_fit_gpu(X, Y, alpha=1.0):
     return r2, rel_err
 
 
-def validate_model_layerwise(model_dir, alpha=1.0, n_shuffle=10, fmt="vision"):
-    """
-    fmt: 'vision' for (n_layers, n_tr, d) with non-zero TR filtering
-         'audio'  for (n_layers, n_chunks, d) where every chunk is a sample
-    """
-    if fmt == "vision":
-        npy_files = sorted(glob(os.path.join(model_dir, "**",
-                                              "*_bold_embedding.npy"),
-                                 recursive=True))
-        extractor = extract_layer_pairs_vision
-    else:
-        npy_files = sorted(glob(os.path.join(model_dir, "**", "*.npy"),
-                                 recursive=True))
-        extractor = extract_layer_pairs_audio
+# ====================================================================
+#  Vision: 单文件模式
+# ====================================================================
 
+def validate_vision_model(npy_path, alpha=1.0, n_shuffle=10):
+    """
+    Vision: 单个 .npy 文件 (n_layers, n_images, feat_dim)
+    所有 image 都是有效样本，不需要过滤。
+    """
+    try:
+        data = np.load(npy_path).astype(np.float32)
+    except Exception:
+        return None
+
+    if data.ndim != 3:
+        return None
+
+    n_layers, N, d = data.shape
+    if n_layers < 2 or N < 2:
+        return None
+
+    results = {}
+    for k in range(n_layers - 1):
+        X = torch.from_numpy(data[k]).float().to(DEVICE)      # (N, d)
+        Y = torch.from_numpy(data[k + 1]).float().to(DEVICE)  # (N, d)
+
+        r2, rel_err = ridge_fit_gpu(X, Y, alpha=alpha)
+
+        r2_shufs, err_shufs = [], []
+        for _ in range(n_shuffle):
+            perm = torch.randperm(N, device=DEVICE)
+            Y_shuf = Y[perm]
+            r2_s, err_s = ridge_fit_gpu(X, Y_shuf, alpha=alpha)
+            r2_shufs.append(r2_s)
+            err_shufs.append(err_s)
+
+        results[k] = {
+            'r2': r2,
+            'rel_err': rel_err,
+            'r2_shuffle': float(np.mean(r2_shufs)),
+            'rel_err_shuffle': float(np.mean(err_shufs)),
+            'n_stimuli': N,
+        }
+
+        del X, Y
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    return results
+
+
+# ====================================================================
+#  Audio / Language: 多文件模式
+# ====================================================================
+
+def validate_multifile_model(model_dir, alpha=1.0, n_shuffle=10):
+    """
+    Audio/Language: 文件夹下多个 .npy 文件，每个 (n_layers, T, d)
+    合并所有文件的样本后做 layer-wise fitting。
+    """
+    npy_files = sorted(glob(os.path.join(model_dir, "*.npy")))
     if len(npy_files) == 0:
         return None
 
@@ -126,17 +142,13 @@ def validate_model_layerwise(model_dir, alpha=1.0, n_shuffle=10, fmt="vision"):
         if data.ndim != 3:
             continue
 
-        valid = extractor(data)
-        if valid is None:
-            continue
-
         if n_layers is None:
-            n_layers = valid.shape[0]
-        elif valid.shape[0] != n_layers:
+            n_layers = data.shape[0]
+        elif data.shape[0] != n_layers:
             continue
 
         for li in range(n_layers):
-            all_layers_data[li].append(valid[li])
+            all_layers_data[li].append(data[li])
 
     if n_layers is None or n_layers < 2:
         return None
@@ -169,7 +181,7 @@ def validate_model_layerwise(model_dir, alpha=1.0, n_shuffle=10, fmt="vision"):
             'rel_err': rel_err,
             'r2_shuffle': float(np.mean(r2_shufs)),
             'rel_err_shuffle': float(np.mean(err_shufs)),
-            'n_stimuli': N
+            'n_stimuli': N,
         }
 
         del X, Y
@@ -179,26 +191,24 @@ def validate_model_layerwise(model_dir, alpha=1.0, n_shuffle=10, fmt="vision"):
     return results
 
 
-def collect_modality(data_root, alpha=1.0, n_shuffle=10, fmt="vision"):
-    """
-    Run layer-wise validation for all models under one modality.
-    """
-    model_dirs = sorted([
-        d for d in glob(os.path.join(data_root, "*"))
-        if os.path.isdir(d)
-    ])
-    print(f"Found {len(model_dirs)} models in {data_root}\n")
+# ====================================================================
+#  模态级收集
+# ====================================================================
+
+def collect_vision(data_root, alpha=1.0, n_shuffle=10):
+    """Vision: embeddings/vision/ 下每个 {model}.npy 是一个模型"""
+    npy_files = sorted(glob(os.path.join(data_root, "*.npy")))
+    print(f"Found {len(npy_files)} models in {data_root}\n")
 
     all_r2, all_rel_err = [], []
     all_r2_shuf, all_rel_err_shuf = [], []
     model_results = {}
 
-    for model_dir in model_dirs:
-        model_name = os.path.basename(model_dir)
+    for npy_file in npy_files:
+        model_name = os.path.basename(npy_file).replace(".npy", "")
         print(f"  {model_name} ...", end=" ", flush=True)
 
-        results = validate_model_layerwise(model_dir, alpha=alpha,
-                                            n_shuffle=n_shuffle, fmt=fmt)
+        results = validate_vision_model(npy_file, alpha=alpha, n_shuffle=n_shuffle)
         if results is None:
             print("skipped")
             continue
@@ -224,17 +234,67 @@ def collect_modality(data_root, alpha=1.0, n_shuffle=10, fmt="vision"):
             model_results)
 
 
+def collect_multifile(data_root, alpha=1.0, n_shuffle=10):
+    """Audio/Language: embeddings/{audio,language}/ 下每个子文件夹是一个模型"""
+    model_dirs = sorted([
+        d for d in glob(os.path.join(data_root, "*"))
+        if os.path.isdir(d)
+    ])
+    print(f"Found {len(model_dirs)} models in {data_root}\n")
+
+    all_r2, all_rel_err = [], []
+    all_r2_shuf, all_rel_err_shuf = [], []
+    model_results = {}
+
+    for model_dir in model_dirs:
+        model_name = os.path.basename(model_dir)
+        print(f"  {model_name} ...", end=" ", flush=True)
+
+        results = validate_multifile_model(model_dir, alpha=alpha, n_shuffle=n_shuffle)
+        if results is None:
+            print("skipped")
+            continue
+
+        r2s = [v['r2'] for v in results.values()]
+        errs = [v['rel_err'] for v in results.values()]
+        r2s_s = [v['r2_shuffle'] for v in results.values()]
+        errs_s = [v['rel_err_shuffle'] for v in results.values()]
+        n = results[0]['n_stimuli']
+
+        all_r2.extend(r2s)
+        all_rel_err.extend(errs)
+        all_r2_shuf.extend(r2s_s)
+        all_rel_err_shuf.extend(errs_s)
+        model_results[model_name] = results
+
+        print(f"N={n}, {len(r2s)} layers, "
+              f"R²={np.mean(r2s):.3f} (shuf={np.mean(r2s_s):.3f}), "
+              f"E_rel={np.mean(errs):.3f} (shuf={np.mean(errs_s):.3f})")
+
+    return (np.array(all_r2), np.array(all_rel_err),
+            np.array(all_r2_shuf), np.array(all_rel_err_shuf),
+            model_results)
+
+
+# ====================================================================
+#  Clopper-Pearson CI
+# ====================================================================
+
 def clopper_pearson(k, n, alpha=0.05):
     lo = stats.beta.ppf(alpha / 2, k, n - k + 1) if k > 0 else 0.0
     hi = stats.beta.ppf(1 - alpha / 2, k + 1, n - k) if k < n else 1.0
     return lo, hi
 
 
+# ====================================================================
+#  Main
+# ====================================================================
+
 def main():
     modalities = {
-        "Vision":   ("embeddings",   "vision"),
-        "Audio":    ("embeddings", "audio"),
-        "Language": ("embeddings",  "audio"),  # same format
+        "Vision":   {"root": "embeddings/vision",   "fmt": "vision"},
+        "Audio":    {"root": "embeddings/audio",     "fmt": "multifile"},
+        "Language": {"root": "embeddings/language",  "fmt": "multifile"},
     }
 
     alpha = 1.0
@@ -242,7 +302,10 @@ def main():
 
     summary = {}
 
-    for modality, (data_root, fmt) in modalities.items():
+    for modality, cfg in modalities.items():
+        data_root = cfg["root"]
+        fmt = cfg["fmt"]
+
         if not os.path.exists(data_root):
             print(f"Skipping {modality}: {data_root} not found")
             summary[modality] = None
@@ -252,9 +315,12 @@ def main():
         print(f"  Modality: {modality}")
         print(f"{'='*60}")
 
-        all_r2, all_rel_err, all_r2_shuf, all_rel_err_shuf, model_results = \
-            collect_modality(data_root, alpha=alpha,
-                             n_shuffle=n_shuffle, fmt=fmt)
+        if fmt == "vision":
+            all_r2, all_rel_err, all_r2_shuf, all_rel_err_shuf, model_results = \
+                collect_vision(data_root, alpha=alpha, n_shuffle=n_shuffle)
+        else:
+            all_r2, all_rel_err, all_r2_shuf, all_rel_err_shuf, model_results = \
+                collect_multifile(data_root, alpha=alpha, n_shuffle=n_shuffle)
 
         if len(all_r2) == 0:
             summary[modality] = None
@@ -262,8 +328,7 @@ def main():
 
         n = len(all_r2)
         _, r2_p = stats.wilcoxon(all_r2, all_r2_shuf, alternative='greater')
-        _, err_p = stats.wilcoxon(all_rel_err, all_rel_err_shuf,
-                                   alternative='less')
+        _, err_p = stats.wilcoxon(all_rel_err, all_rel_err_shuf, alternative='less')
 
         k_r2 = int(np.sum(all_r2 >= 0.90))
         ci_r2 = clopper_pearson(k_r2, n)
@@ -285,7 +350,8 @@ def main():
         }
 
         # Save arrays
-        save_path = f"filterData/layerwise_validation_{modality.lower()}.npz"
+        os.makedirs("results", exist_ok=True)
+        save_path = f"results/layerwise_validation_{modality.lower()}_new.npz"
         np.savez(save_path,
                  all_r2=all_r2, all_rel_err=all_rel_err,
                  all_r2_shuf=all_r2_shuf, all_rel_err_shuf=all_rel_err_shuf,

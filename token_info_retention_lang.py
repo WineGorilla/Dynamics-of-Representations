@@ -378,7 +378,7 @@ LANGUAGE_MODELS = [
     "nghuyong/ernie-2.0-base-en",
     "nghuyong/ernie-2.0-large-en",
     "kssteven/ibert-roberta-base",
-    "nreimers/MiniLM-L6-H384-uncased",
+    "sentence-transformers/all-MiniLM-L6-v2",
     "microsoft/mpnet-base",
     "google/rembert",
     "roberta-base",
