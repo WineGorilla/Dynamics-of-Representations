@@ -27,6 +27,14 @@ python extractnew/extract_image_embeddings.py \
     --save_root embeddings \
     --device cuda \
     --batch_size 8
+
+
+
+python extractnew/extract_image_embeddings.py \
+    --data_root /data/mi2-interns/ruiyu/Dynamics-of-Representations/data/img_data/images \
+    --save_root embeddings/fmriimg \
+    --device cuda \
+    --batch_size 8
 """
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

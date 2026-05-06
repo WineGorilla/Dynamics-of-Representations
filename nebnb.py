@@ -207,9 +207,9 @@ def print_inter_modal_table(summaries):
 def main():
     base_dir = "neweigvals"
     modalities = {
-        "Vision":   os.path.join(base_dir, "vision"),
-        "Audio":    os.path.join(base_dir, "audio"),
-        "Language": os.path.join(base_dir, "language"),
+        "Vision":   os.path.join(base_dir, "random_vision"),
+        "Audio":    os.path.join(base_dir, "random_audio"),
+        "Language": os.path.join(base_dir, "random_language"),
     }
 
     summaries = []

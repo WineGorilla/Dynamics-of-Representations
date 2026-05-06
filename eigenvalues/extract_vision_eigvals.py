@@ -109,13 +109,13 @@ def collect_one_vision_model(model, root="embeddings/vision"):
 
 
 def main():
-    save_root = "neweigvals/vision"
+    save_root = "neweigvals/fmrivision"
     os.makedirs(save_root, exist_ok=True)
 
     for model in VISION_MODELS:
         print(f"\nCollecting: {model}")
         try:
-            eigvals = collect_one_vision_model(model=model, root="embeddings/vision")
+            eigvals = collect_one_vision_model(model=model, root="embeddings/fmriimg")
             save_path = os.path.join(save_root, f"{model}.npy")
             np.save(save_path, eigvals)
             print(f"  ✅ saved → {save_path}  shape={eigvals.shape}")

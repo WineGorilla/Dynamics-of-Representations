@@ -49,69 +49,62 @@ from core.eigenvalues import collect_one_img_model
 
 
 vision_models = [
-        # "beit-base-patch16-224-pt22k-ft22k",
-        # "beit-large-patch16-224-pt22k-ft22k",
-        # "data2vec-vision-base",
-        # "data2vec-vision-large",
-        # "deit-base-patch16-224",
-        # "deit-small-patch16-224",
-        # "dino-vitb16",
-        # "dino-vits16",
-        # "dinov2-base",
-        # "dinov2-large",
-        # "dinov2-small",
-
-        # "vit-base-patch16-224-in21k",
-        # "vit-large-patch16-224-in21k",
-
-        # "vit-mae-base",
-        # "vit-mae-large",
-
-        # "vit-msn-base",
-        # "vit-msn-large",
-
-        # # ── CLIP 系列 ──────────────────────────────────
-        # "clip-vit-base-patch32",
-        # "clip-vit-base-patch16",
-        # "clip-vit-large-patch14",
-
-        # # ── Swin Transformer 系列 ──────────────────────
-        # "swin-tiny-patch4-window7-224",
-        # "swin-small-patch4-window7-224",
-        # "swin-base-patch4-window7-224",
-        # "swin-large-patch4-window7-224",
-
-        # # ── SigLIP 系列 ────────────────────────────────
-        # "siglip-base-patch16-224",
-        # "siglip-large-patch16-384",
-
-        # # ── SAM 视觉编码器 ─────────────────────────────
-        # "sam-vit-base",
-        # "sam-vit-large",
-        # "sam-vit-huge",
-
-        # Resnet系列
-        "resnet18",
-        "resnet34",
-        "resnet50",
-        "resnet101",
-        "wide_resnet50_2",
-        "densenet121",
-        "densenet201",
-        "efficientnet_b0",
-        "efficientnet_b4",
-        "convnext_tiny",
-        "convnext_base",
-        "vgg16",
-        "vgg19",
+    # ── BEiT ──
+    "beit-base-patch16-224-pt22k-ft22k",
+    "beit-large-patch16-224-pt22k-ft22k",
+    # ── Data2Vec-Vision ──
+    "data2vec-vision-base",
+    "data2vec-vision-large",
+    # ── DeiT ──
+    "deit-base-patch16-224",
+    "deit-small-patch16-224",
+    # ── DINO ──
+    "dino-vitb16",
+    "dino-vits16",
+    # ── DINOv2 ──
+    "dinov2-base",
+    "dinov2-large",
+    "dinov2-small",
+    # ── ViT ──
+    "vit-base-patch16-224-in21k",
+    "vit-large-patch16-224-in21k",
+    # ── ViT-MAE ──
+    "vit-mae-base",
+    "vit-mae-large",
+    # ── ViT-MSN ──
+    "vit-msn-base",
+    "vit-msn-large",
+    # ── CLIP ──
+    "clip-vit-base-patch32",
+    "clip-vit-base-patch16",
+    "clip-vit-large-patch14",
+    # ── Swin ──
+    "swin-tiny-patch4-window7-224",
+    "swin-small-patch4-window7-224",
+    "swin-large-patch4-window7-224",
+    # ── SAM ──
+    "sam-vit-base",
+    "sam-vit-large",
+    "sam-vit-huge",
+    # ── CNN ──
+    "resnet50",
+    "resnet101",
+    "densenet121",
+    "densenet201",
+    "efficientnet_b0",
+    "efficientnet_b4",
+    "convnext_tiny",
+    "convnext_base",
+    "vgg16",
+    "vgg19",
 ]
 
-os.makedirs("processed_new/eigvals/vision", exist_ok=True)
+os.makedirs("neweigvals/newvision", exist_ok=True)
 
 for model in vision_models:
     print(f"Collecting: {model}")
     eigvals = collect_one_img_model(model=model)
-    save_path = f"processed_new/eigvals/vision/{model.replace('/', '_')}.npy"
+    save_path = f"neweigvals/newvision/{model.replace('/', '_')}.npy"
     np.save(save_path, eigvals)
     print(f"  saved → {save_path}  shape={eigvals.shape}")
 
